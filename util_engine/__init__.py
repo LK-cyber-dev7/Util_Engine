@@ -1,6 +1,6 @@
 """
 CustomIterable Package
-----------------------
+-----------------------
 
 A Python package providing a flexible, chainable, and memory-efficient
 custom iterable class for numbers and sequences. 

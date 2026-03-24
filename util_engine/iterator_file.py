@@ -2,6 +2,7 @@ import itertools
 import math
 import types
 
+
 def prime_check(n):
     if abs(n) % 1 > 1e-15:
         return False
