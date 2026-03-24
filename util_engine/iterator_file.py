@@ -1,6 +1,8 @@
 import itertools
 import math
 import types
+from collections.abc import Callable
+from typing import Any
 
 
 def prime_check(n):
@@ -137,29 +139,29 @@ def find_factors(n: int, pure=False) -> list[int]:
     return sorted(result)
 
 def perfect_check(n):
-    return float(n).is_integer() and sum(find_factors(n)) == n
+    return float(n).is_integer() and sum(find_factors(n)) == 2*n
 
 def abundancy_check(n,neg=False):
     if not float(n).is_integer():
         return False
     n = round(n)
     if neg:
-        return sum(find_factors(n)) > abs(n)
+        return sum(find_factors(n)) > 2*abs(n)
     elif n <= 0:
         return False
     else:
-        return sum(find_factors(n)) > n
+        return sum(find_factors(n)) > 2*n
 
 def deficiency_check(n, neg=False):
     if not float(n).is_integer():
         return False
     n = round(n)
     if neg:
-        return sum(find_factors(n)) < abs(n)
+        return sum(find_factors(n)) < 2*abs(n)
     elif n <= 0:
         return False
     else:
-        return sum(find_factors(n)) < n
+        return sum(find_factors(n)) < 2*n
 
 def int_or_zero(n):
     try:
@@ -173,7 +175,7 @@ def palindrome_check(n):
     return str(n) == str(n)[::-1]
 
 class CustomIterable:
-    def __init__(self, stop_start,stop=None,step=1):
+    def __init__(self, stop_start,stop:int =None,step:int =1):
         if isinstance(stop_start,(tuple,list, types.GeneratorType)):
             values = stop_start
         elif stop is None:
@@ -187,179 +189,179 @@ class CustomIterable:
         self.values, copy_gen = itertools.tee(self.values)
         return copy_gen
 
-    def is_even(self):
+    def is_even(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i % 2 == 0 and abs(i) % 1 < 1e-15))
 
-    def skip_even(self):
+    def skip_even(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i % 2 != 0 and abs(i) % 1 < 1e-15))
 
-    def is_odd(self):
+    def is_odd(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i % 2 == 1 and abs(i) % 1 < 1e-15))
 
-    def skip_odd(self):
+    def skip_odd(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i % 2 != 1 and abs(i) % 1 < 1e-15))
 
-    def is_prime(self):
+    def is_prime(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if prime_check(i)))
 
-    def skip_prime(self):
+    def skip_prime(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if not prime_check(i)))
 
-    def is_composite(self):
+    def is_composite(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if composite_check(i)))
 
-    def skip_composite(self):
+    def skip_composite(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if not composite_check(i)))
 
-    def is_divisible_by(self,divisor):
+    def is_divisible_by(self,divisor) -> CustomIterable:
         return CustomIterable((i for i in self.values if is_divisible(i,divisor)))
 
-    def skip_divisible_by(self,divisor):
+    def skip_divisible_by(self,divisor) -> CustomIterable:
         return CustomIterable((i for i in self.values if not is_divisible(i, divisor)))
 
-    def is_greater_than(self,n):
+    def is_greater_than(self,n) -> CustomIterable:
         return CustomIterable((i for i in self.values if i > n))
 
-    def skip_greater_than(self,n):
+    def skip_greater_than(self,n) -> CustomIterable:
         return CustomIterable((i for i in self.values if i <= n))
 
-    def is_less_than(self,n):
+    def is_less_than(self,n) -> CustomIterable:
         return CustomIterable((i for i in self.values if i < n))
 
-    def skip_less_than(self,n):
+    def skip_less_than(self,n) -> CustomIterable:
         return CustomIterable((i for i in self.values if i >= n))
 
-    def is_between(self,a,b):
+    def is_between(self,a,b) -> CustomIterable:
         return CustomIterable((i for i in self.values if a < i < b))
 
-    def skip_between(self,a,b):
+    def skip_between(self,a,b) -> CustomIterable:
         return CustomIterable((i for i in self.values if not (a < i < b)))
 
-    def is_inclusive_between(self,a,b):
+    def is_inclusive_between(self,a,b) -> CustomIterable:
         return CustomIterable((i for i in self.values if a <= i <= b))
 
-    def skip_inclusive_between(self,a,b):
+    def skip_inclusive_between(self,a,b) -> CustomIterable:
         return CustomIterable((i for i in self.values if not (a <= i <= b)))
 
-    def is_equal_to(self,k):
+    def is_equal_to(self,k) -> CustomIterable:
         return CustomIterable((i for i in self.values if i == k))
 
-    def skip_equal_to(self,k):
+    def skip_equal_to(self,k) -> CustomIterable:
         return CustomIterable((i for i in self.values if i != k))
 
-    def is_positive(self):
+    def is_positive(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i > 0))
 
-    def skip_positive(self):
+    def skip_positive(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i <= 0))
 
-    def is_negative(self):
+    def is_negative(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i < 0))
 
-    def skip_negative(self):
+    def skip_negative(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i >= 0))
 
-    def is_zero(self):
+    def is_zero(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i == 0))
 
-    def skip_zero(self):
+    def skip_zero(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if i != 0))
 
-    def is_power_of(self, power):
+    def is_power_of(self, power:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if power_of(i, power)))
 
-    def skip_power_of(self, power):
+    def skip_power_of(self, power:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if not power_of(i, power)))
 
-    def is_square(self):
+    def is_square(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if square_check(i)))
 
-    def skip_square(self):
+    def skip_square(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if not square_check(i)))
 
-    def is_cube(self):
+    def is_cube(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if cube_check(i)))
 
-    def skip_cube(self):
+    def skip_cube(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if not cube_check(i)))
 
-    def is_nth_power(self, n):
+    def is_nth_power(self, n:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if nth_power_check(i, n)))
 
-    def skip_nth_power(self, n):
+    def skip_nth_power(self, n:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if not nth_power_check(i, n)))
 
-    def is_coprime_to(self, n):
+    def is_coprime_to(self, n:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if coprime_check(i, n)))
 
-    def skip_coprime_to(self, n):
+    def skip_coprime_to(self, n:int) -> CustomIterable:
         return CustomIterable((i for i in self.values if not coprime_check(i, n)))
 
-    def map(self, func, *params):
+    def map(self, func:Callable, *params) -> CustomIterable:
         return CustomIterable((func(i, *params) for i in self.values))
 
-    def has_factor_count(self, minimum=0, maximum=2):
+    def has_factor_count(self, minimum:int=0, maximum:int=2) -> CustomIterable:
         return CustomIterable((i for i in self.values if float(i).is_integer() and minimum <= len(find_factors(i)) <= maximum))
 
-    def is_perfect_number(self):
+    def is_perfect_number(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if perfect_check(i)))
 
-    def skip_perfect_number(self):
+    def skip_perfect_number(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if not perfect_check(i)))
 
-    def is_abundant(self, allow_negatives=False):
+    def is_abundant(self, allow_negatives: bool=False) -> CustomIterable:
         return CustomIterable((i for i in self.values if abundancy_check(i,neg=allow_negatives)))
 
-    def skip_abundant(self, allow_negatives=False):
+    def skip_abundant(self, allow_negatives: bool=False) -> CustomIterable:
         return CustomIterable((i for i in self.values if not abundancy_check(i,neg=allow_negatives)))
 
-    def is_deficient(self, allow_negatives=False):
+    def is_deficient(self, allow_negatives: bool=False) -> CustomIterable:
         return CustomIterable((i for i in self.values if deficiency_check(i,neg=allow_negatives)))
 
-    def skip_deficient(self, allow_negatives=False):
+    def skip_deficient(self, allow_negatives: bool=False) -> CustomIterable:
         return CustomIterable((i for i in self.values if not deficiency_check(i,neg=allow_negatives)))
 
-    def contains(self, n):
+    def contains(self, n) -> CustomIterable:
         return CustomIterable((i for i in self.values if str(n) in str(i)))
 
-    def does_not_contain(self, n):
+    def does_not_contain(self, n) -> CustomIterable:
         return CustomIterable((i for i in self.values if str(n) not in str(i)))
 
-    def has_digit_sum(self, n):
+    def has_digit_sum(self, n: int) -> CustomIterable:
         return CustomIterable((i for i in self.values if sum(map(int_or_zero, str(i))) == n))
 
-    def skip_digit_sum(self, n):
+    def skip_digit_sum(self, n: int) -> CustomIterable:
         return CustomIterable((i for i in self.values if sum(map(int_or_zero, str(i))) != n))
 
-    def skip_first(self, n):
+    def skip_first(self, n: int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[n:] if len(value_list) > n+1 else [])
 
-    def keep_first(self, n):
+    def keep_first(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[:n] if len(value_list) > n else value_list)
 
-    def skip_last(self, n):
+    def skip_last(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[:-n] if len(value_list) > n else [])
 
-    def keep_last(self, n):
+    def keep_last(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[-n:] if len(value_list) > n else value_list)
 
-    def skip_first_and_last(self, n):
+    def skip_first_and_last(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[n:-n] if len(value_list) > 2*n+1 else [])
 
-    def keep_every(self, n):
+    def keep_every(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable(value_list[::n] if len(value_list) > n else [])
 
-    def skip_every(self, n):
+    def skip_every(self, n:int) -> CustomIterable:
         value_list = list(self.values)
         return CustomIterable([v for i,v in enumerate(value_list) if (i+1) % n != 0])
 
-    def skip_subset(self,a,b):
+    def skip_subset(self,a:int,b:int) -> CustomIterable:
         if not isinstance(a,int) or not isinstance(b,int):
             raise ValueError('a and b must be int')
 
@@ -375,15 +377,8 @@ class CustomIterable:
 
         return CustomIterable(value_list[0:a] + (value_list[b:]))
 
-    def is_palindromic(self):
+    def is_palindromic(self) -> CustomIterable:
         return CustomIterable((i for i in self.values if palindrome_check(i)))
 
-    def filter(self,func):
+    def filter(self,func:Callable[Any,bool]) -> CustomIterable:
         return CustomIterable((i for i in self.values if func(i)))
-
-
-
-
-print(sum([0]))
-
-
