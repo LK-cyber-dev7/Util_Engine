@@ -174,6 +174,35 @@ def palindrome_check(n):
         return False
     return str(n) == str(n)[::-1]
 
+def cum_gen(func,gen,initial):
+    result = initial
+    for i in gen:
+        result = func(result,i)
+        yield result
+
+def suc_gen(func,initial,num):
+    result = initial
+    for _ in range(num):
+        result = func(result)
+        yield result
+
+def multi_suc_gen(func,initial,num):
+    inputs = list(initial)
+    for _ in range(num):
+        output = func(*inputs)
+        inputs.append(output)
+        inputs.pop(0)
+        yield output
+
+def infi_gen(func,initial):
+    inputs = list(initial)
+    while True:
+        output = func(*inputs)
+        inputs.append(output)
+        inputs.pop(0)
+        yield output
+
+
 class CustomIterable:
     def __init__(self, stop_start,stop:int =None,step:int =1):
         if isinstance(stop_start,(tuple,list, types.GeneratorType)):
@@ -382,3 +411,28 @@ class CustomIterable:
 
     def filter(self,func:Callable[Any,bool]) -> CustomIterable:
         return CustomIterable((i for i in self.values if func(i)))
+
+    def cum_sum(self):
+        return CustomIterable(cum_gen(lambda a,b:a+b,self.values,0))
+
+    def cum_product(self):
+        return CustomIterable(cum_gen(lambda a,b:a*b,self.values,1))
+
+    def cum_func(self,func:Callable[[Any,Any],bool], initial:Any) -> CustomIterable:
+        return CustomIterable(cum_gen(func,self.values,initial))
+
+    @staticmethod
+    def successive_func(func:Callable[Any,bool],number:int,initial:Any) -> CustomIterable:
+        return CustomIterable(suc_gen(func,initial,number))
+
+    @staticmethod
+    def sliding_seq(func:Callable[Any,bool],number:int,*initials) -> CustomIterable:
+        return CustomIterable(multi_suc_gen(func,initials,number))
+
+    @staticmethod
+    def infinite_slider(func:Callable[Any,bool],*initials) -> CustomIterable:
+        return CustomIterable(infi_gen(func,initials))
+
+    @staticmethod
+    def fibonacci(number:int) -> CustomIterable:
+        return CustomIterable(multi_suc_gen(lambda x,y:x+y, (0,1,),number))
