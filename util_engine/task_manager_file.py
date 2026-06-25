@@ -1,10 +1,9 @@
 import concurrent
-import pickle
 import threading
 import multiprocessing
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from typing import Literal
+from typing import Literal, Callable, Any
 
 from .task_resource_file import Branch, Method, Task, MutableRegister, ImmutableRegister
 from .error_manager_file import SchedulerOverloadError
@@ -37,15 +36,15 @@ def _start_async_engine_thread():
 def start_asyncio_branch(name: str):
     global async_engine_started, async_engine_loop
 
-    # first time -> start the engine thread
     if not async_engine_started:
-        threading.Thread(target=_start_async_engine_thread, daemon=True).start()
+        threading.Thread(
+            target=_start_async_engine_thread,
+            daemon=True
+        ).start()
 
-        # WAIT for loop to be ready
         while async_engine_loop is None:
             time.sleep(0.01)
 
-    # schedule branch inside event loop
     fut = asyncio.run_coroutine_threadsafe(
         run_async_scheduler(name),
         async_engine_loop
@@ -53,9 +52,10 @@ def start_asyncio_branch(name: str):
 
     async_branches[name] = fut
 
+    return fut
 
-def initiate_branch(name: str, method: Literal['multiprocessing','threading','asyncio'], mutable: bool =False) -> Branch:
-    tmp = Branch(name, method, mutable)
+def initiate_branch(name: str, method: Literal['multiprocessing','threading','asyncio'], mutable: bool =False, exit_on_completion: bool = True) -> Branch:
+    tmp = Branch(name, method, mutable, exit_on_completion)
     branch_cluster[name] = tmp
     return tmp
 
@@ -71,8 +71,13 @@ def run_thread_scheduler(name):
             for i in register:
                 current = time.monotonic()
                 if current - i.last_run_time >= i.interval:
+
+                    if i._running + i.stats['runs'] >= i.max_tries or (i._running + i.stats['runs'] - i.stats['failures'] >= i.target_runs and i.strict_target):
+                        continue
+
                     try:
                         future = executor.submit(i.work, *i.args, **i.kwargs)
+                        i._running += 1
                     except RuntimeError:
                         raise SchedulerOverloadError(f'Running tasks overloaded ThreadPoolExecutor. Branch name {name}')
                     else:
@@ -84,11 +89,15 @@ def run_thread_scheduler(name):
                         futures[future] = i
             for f, t in futures.copy().items():
                 if f.done():
+                    t._running -= 1
                     if f.exception():
                         register.task_failure(t.task_name)
                     else:
                         register.task_success(t.task_name, f.result())
                     del futures[f]
+
+            if register.check_completion() and branch_cluster[name].exit_on_completion:
+                branch_cluster[name]._stop_run()
 
             elapsed: float = time.monotonic() - start
             time.sleep(max(0, TICK - elapsed))
@@ -102,8 +111,13 @@ def run_process_scheduler(name):
             for i in register:
                 current = time.monotonic()
                 if current - i.last_run_time >= i.interval:
+
+                    if i._running + i.stats['runs'] >= i.max_tries or (i._running + i.stats['runs'] - i.stats['failures'] >= i.target_runs and i.strict_target):
+                        continue
+
                     try:
                         future = executor.submit(i.work, *i.args, **i.kwargs)
+                        i._running += 1
                     except RuntimeError:
                         raise SchedulerOverloadError(f'Running tasks overloaded ThreadPoolExecutor. Branch name {name}')
                     else:
@@ -115,11 +129,15 @@ def run_process_scheduler(name):
                         futures[future] = i
             for f, t in futures.copy().items():
                 if f.done():
+                    i._running -= 1
                     if f.exception():
                         register.task_failure(t.task_name)
                     else:
                         register.task_success(t.task_name, f.result())
                     del futures[f]
+
+            if register.check_completion() and branch_cluster[name].exit_on_completion:
+                branch_cluster[name]._stop_run()
 
             elapsed: float = time.monotonic() - start
             time.sleep(max(0, TICK - elapsed))
@@ -137,7 +155,6 @@ async def async_task_runner(task,register,executor):
         register.task_failure(task.task_name)
     else:
         register.task_success(task.task_name, result)
-
 
 async def run_async_scheduler(name):
     register: MutableRegister | ImmutableRegister = branch_cluster[name]._get_register()
@@ -161,21 +178,51 @@ async def run_async_scheduler(name):
         await asyncio.sleep(max(0, TICK - elapsed))
     executor.shutdown(wait=True)
 
-def start_loop(branch: Branch):
+def start_loop(branch: Branch, background: bool = False) -> None:
     branch._start_run()
     if branch.get_method() == Method.MULTIPROCESSING:
         try:
-            multiprocessing.Process(target=run_process_scheduler, args=(branch.name,)).start()
+            tmp = multiprocessing.Process(
+                target=run_process_scheduler,
+                args=(branch.name,)
+            )
+            tmp.start()
+
+            if not background:
+                tmp.join()
+
         except SchedulerOverloadError as e:
             branch._error = e
             branch._kill()
+
     elif branch.get_method() == Method.THREADING:
         try:
-            threading.Thread(target=run_thread_scheduler, args=(branch.name,)).start()
+            tmp = threading.Thread(
+                target=run_thread_scheduler,
+                args=(branch.name,)
+            )
+            tmp.start()
+
+            if not background:
+                tmp.join()
+
         except SchedulerOverloadError as e:
             branch._error = e
             branch._kill()
+
     elif branch.get_method() == Method.ASYNCIO:
-        start_asyncio_branch(branch.name)
+        try:
+            fut = start_asyncio_branch(branch.name)
 
+            if not background:
+                fut.result()
 
+        except SchedulerOverloadError as e:
+            branch._error = e
+            branch._kill()
+
+def run_n_times(name:str, task: Callable, *args, interval: int | float = 0.1, n: int = 1, method: Literal['multiprocessing','threading','asyncio'] = 'threading', **kwargs):
+    tmp = initiate_branch(f"__default_{name}", method=method)
+    tmp.assign_task(name, task, interval,config={"target_runs":n}, *args, **kwargs)
+    start_loop(tmp)
+    return tmp.get_results(name)

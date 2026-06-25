@@ -67,7 +67,7 @@ class Task:
 
     id_counter: int = 0
 
-    def __init__(self, task_name:str, work, interval: int | float, priority:int=float('inf'), paused:bool=False, max_fails:int=100, pause_on_error:bool=False, catch_up:bool=False, max_fail_streak:int=10, max_tries:int = float('inf'), target_runs:int = float('inf'),pass_rate:float = 0.5,*args, **kwargs) -> None:
+    def __init__(self, task_name:str, work, interval: int | float, *args, priority:int=float('inf'), paused:bool=False, max_fails:int=100, pause_on_error:bool=False, catch_up:bool=False, strict_target:bool=True, max_fail_streak:int=10, max_tries:int = float('inf'), target_runs:int = float('inf'),pass_rate:float = 0.5, **kwargs) -> None:
         self.task_name:str = task_name
 
         self.id: int = Task.id_counter
@@ -133,13 +133,18 @@ class Task:
         else:
             raise ValueError('INVALID PAUSE ON ERRR') # easter egg intentional spelling error
 
+        if flag_verify(strict_target):
+            self.strict_target: bool = strict_target
+        else:
+            raise ValueError('INVALID STRICT TARGET')
+
         self.results = []
         self.stats:dict[str,float | int] = {
             'failures':0,
             'runs':0,
-            'non_zero_results':0,
             'retry_streak':0,
         }
+        self._running = 0
 
     def is_alive(self) -> bool:
         return self.status != Status.TERMINATED and self.status != Status.COMPLETED and self.status != Status.FAILED
@@ -325,7 +330,6 @@ class Task:
             self.stats: dict[str, float | int] = {
                 'failures': 0,
                 'runs': 0,
-                'non_zero_results': 0,
                 'retry_streak': 0,
             }
             self.last_run_time = time.monotonic()
@@ -500,6 +504,9 @@ class MutableRegister:
         with self.lock:
             for i in self.data.values():
                 i.revive(yes=True)
+
+    def check_completion(self) -> bool:
+        return len(self.active_tasks) == 0
 
     def __iter__(self):
         """
@@ -693,6 +700,9 @@ class ImmutableRegister:
             for i in self.data.values():
                 i.revive(yes=True)
 
+    def check_completion(self) -> bool:
+        return len(self.active_tasks) == 0
+
     def __iter__(self):
         """
         Iterate over active tasks in priority order.
@@ -726,8 +736,9 @@ class State(enum.Enum):
 
 class Branch:
     __id_counter: int = 0
-    def __init__(self, name: str, method: Literal['multiprocessing','threading','asyncio'], mutable=False) -> None:
+    def __init__(self, name: str, method: Literal['multiprocessing','threading','asyncio'], mutable=False, exit_on_completion:bool=True) -> None:
         self.name:str = name
+        self.exit_on_completion:bool = exit_on_completion
         self.__mutable:bool = mutable
         self.__id:int = Branch.__id_counter
         self.__state: State = State.ALIVE
@@ -748,7 +759,7 @@ class Branch:
         self.__names:set[str] = set()
         self.__method:Method = Method.THREADING if method == "threading" else Method.ASYNCIO if method == "asyncio" else Method.MULTIPROCESSING
 
-    def assign_task(self, name:str, work: Callable, interval: int | float, config:dict, *args, **kwargs) -> None:
+    def assign_task(self, name:str, work: Callable, interval: int | float, *args, config:dict = None, **kwargs) -> None:
         """
         Create and assign a new task to this branch.
 
@@ -772,9 +783,10 @@ class Branch:
             except:
                 raise SchedulerBranchError(f"User tried to assign task with INVLAID work.Branch uses multiprocessing, work must be pickleable.")
 
+        config = config if config is not None else {}
 
         try:
-            t = Task(name,work,interval=interval,**config,*args,**kwargs)
+            t = Task(name, work, interval, *args, **kwargs, **config)
         except TypeError:
             raise InvalidConfigError(f"User tried to assign task with INVALID config")
 
@@ -893,14 +905,15 @@ class Branch:
         """
         return self.__mutable
 
-    def get_method(self) -> str:
+    def get_method(self) -> Method:
         """
         Return the execution method used by this branch.
 
         Returns:
             Method: THREADING, MULTIPROCESSING, or ASYNCIO.
         """
-        return self.__method.value
+
+        return self.__method
 
     def _get_register(self) -> ImmutableRegister | MutableRegister:
         """
@@ -926,6 +939,18 @@ class Branch:
         Retrieve the last recorded error for this branch.
         """
         return self._error
+
+    def get_stats(self, t_name:str) -> dict:
+        """
+        Return a summary of statistics for a specific task in this branch.
+        """
+        return self.__register.get_task(t_name).stats
+
+    def get_results(self, t_name:str) -> list:
+        """
+        Return a summary of results for a specific task in this branch.
+        """
+        return self.__register.get_task(t_name).results
 
     def restart(self, reset_tasks: bool=False) -> None:
         """
